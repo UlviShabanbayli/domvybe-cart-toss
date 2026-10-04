@@ -1,0 +1,423 @@
+/* Cart Toss v3 — a product card as the hero of a page. Add a size: the shoe pops out of the card in 3D, flies into
+   the bag, and the card flips over to its back: a mini-cart receipt. Three looks (?look=glass|swiss|luxe), each a
+   different card style; the stage in every look takes its colour from the chosen colourway (ember|cobalt|magenta).
+
+   1 tokens: primitive → colourway alias → semantic   2 stage, frame, ambient   3 the frame's words and the shop bar
+   4 the card: 3D, faces, shading  5 the front   6 the back (receipt)   7 the pop-out and the impact   8 footer
+   9 look B (swiss)   10 look C (luxe)   11 reduced motion
+
+   ---- 1. TOKENS: three layers ----------------------------------------------------------------------------------
+   1a PRIMITIVES (:root). Raw, hand-tuned values with no meaning. One tonal scale per colourway, each an analogous run
+      with depth rather than a mix with white or black:
+        ember    50–200 cream and amber · 300–400 amber–tangerine · 500 ember orange · 600–700 vermilion–crimson
+                 · 800–950 wine
+        cobalt   50–200 ice and sky · 300–400 cyan–azure · 500 cobalt · 600–700 ultramarine · 800–950 indigo night
+        magenta  50–200 blush and peach · 300–400 coral-rose · 500 magenta · 600–700 berry · 800–950 plum
+      Plus the champagne gold scale (--gold-50…900), the neutrals (--ink-990 … --paper-50) and the
+      white/black/"on" pairs.
+   1b COLOURWAY ALIASES ([data-color]). --c-50 … --c-950 point at the chosen scale. --c-on is the ink that reads on
+      --c-500, and --c-alt is its counterpart. All of them are registered (@property), so a colour change glides
+      (0.7 s) through every gradient that uses them.
+   1c SEMANTIC TOKENS (per look, on .stage, so they resolve against the gliding aliases):
+        stage    --stage-base --stage-1/2/3/4 --vignette --scrim --on-field --on-field-muted --grid-line
+        card     --surface --surface-2 --surface-edge --surface-sheen --ink --ink-muted --ink-faint --control-edge
+        accent   --accent --on-accent --accent-soft --accent-text --glow --focus
+        well     --well-spot --well-edge --well-ink --floor
+        actions  --btn --on-btn --btn-icon --chip-on --on-chip-on --tag --on-tag --badge --on-badge
+        frame    --pill --pill-edge --on-pill --on-pill-muted --pill-icon --on-pill-icon --bag --on-bag --bag-edge --ring
+        light    --highlight --lowlight --shadow-tint --shade --sweep --flash --flash-core --spark --plus-ink --star
+                 --star-off --em --burst-1…5 (the impact's particles, read by app.js)
+        per look glass --stage-halo --sheen-blob --well-depth · swiss --grid-base --well-grid --on-field-alt
+                 · luxe --beam --pool --mote --label --metal --metal-soft --metal-hi --metal-glint --metal-line --metal-glow
+                 --well-cone · glass and luxe --swatch-gap --swatch-ring
+      On <html>: --page (the body behind the stage) and --meta (the browser's theme colour, read by app.js).
+   COMPONENT RULES (sections 2–10) use only semantic tokens. The exceptions are transparency helpers:
+   color-mix(… N%, transparent) and the `transparent` keyword. */
+
+@property --c-50  { syntax: '<color>'; inherits: true; initial-value: #FFF6EA; }
+@property --c-100 { syntax: '<color>'; inherits: true; initial-value: #FFE9C7; }
+@property --c-200 { syntax: '<color>'; inherits: true; initial-value: #FFD08A; }
+@property --c-300 { syntax: '<color>'; inherits: true; initial-value: #FFB054; }
+@property --c-400 { syntax: '<color>'; inherits: true; initial-value: #FF8A2C; }
+@property --c-500 { syntax: '<color>'; inherits: true; initial-value: #F5541A; }
+@property --c-600 { syntax: '<color>'; inherits: true; initial-value: #DE3A16; }
+@property --c-700 { syntax: '<color>'; inherits: true; initial-value: #AE2415; }
+@property --c-800 { syntax: '<color>'; inherits: true; initial-value: #74131C; }
+@property --c-900 { syntax: '<color>'; inherits: true; initial-value: #420A15; }
+@property --c-950 { syntax: '<color>'; inherits: true; initial-value: #23060C; }
+@property --c-on  { syntax: '<color>'; inherits: true; initial-value: #0B0A09; }
+@property --c-alt { syntax: '<color>'; inherits: true; initial-value: #FAFAF7; }
+
+/* 1a · primitives */
+:root {
+  --sans: 'Geist', -apple-system, system-ui, sans-serif; --serif: 'Instrument Serif', Georgia, serif;
+  --grot: 'Inter Tight', 'Geist', system-ui, sans-serif; --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --didone: 'Cormorant Garamond', Georgia, serif;
+
+  --ember-50: #FFF6EA; --ember-100: #FFE9C7; --ember-200: #FFD08A; --ember-300: #FFB054; --ember-400: #FF8A2C;
+  --ember-500: #F5541A; --ember-600: #DE3A16; --ember-700: #AE2415; --ember-800: #74131C; --ember-900: #420A15; --ember-950: #23060C;
+
+  --cobalt-50: #EEF7FF; --cobalt-100: #D5ECFF; --cobalt-200: #A3D8FF; --cobalt-300: #5CC0FF; --cobalt-400: #3A8DFF;
+  --cobalt-500: #2B4EF7; --cobalt-600: #2838DE; --cobalt-700: #2026AC; --cobalt-800: #19196E; --cobalt-900: #0E0E40; --cobalt-950: #070723;
+
+  --magenta-50: #FFF3F1; --magenta-100: #FFE2DC; --magenta-200: #FFC3B4; --magenta-300: #FF9C98; --magenta-400: #FF5E92;
+  --magenta-500: #FF3A8C; --magenta-600: #D2156F; --magenta-700: #A00F63; --magenta-800: #600C4A; --magenta-900: #35082C; --magenta-950: #1E0419;
+
+  --gold-50: #FFF8EA; --gold-100: #FFF0D0; --gold-200: #F6DFAE; --gold-300: #EACB8E; --gold-400: #DDB772; --gold-500: #C9A15A;
+  --gold-600: #A8823F; --gold-700: #84632D; --gold-800: #5B4420; --gold-900: #2E2416; --gold-ink: #1A130A;
+
+  --white: #FFFFFF; --black: #000000;
+  --paper-50: #FAFAF7; --paper-100: #F2F1EC; --paper-200: #E6E4DD;
+  --ivory-100: #F4ECDD; --ivory-300: #C4B8A4; --ivory-500: #998E7B;
+  --ink-500: #66625B; --ink-600: #4A4741; --ink-800: #1E1C1A; --ink-850: #151311; --ink-900: #0C0B0A; --ink-950: #0B0A09; --ink-990: #080706;
+  --well-noir-1: #4A4135; --well-noir-2: #1A1714; --well-noir-3: #0D0C0B;
+}
+
+/* 1b · colourway aliases (with each colourway's swatch, which the radios show in every look) */
+:root { --swatch-ember: var(--ember-500); --swatch-cobalt: var(--cobalt-500); --swatch-magenta: var(--magenta-500); }
+[data-color="ember"] {
+  --c-50: var(--ember-50); --c-100: var(--ember-100); --c-200: var(--ember-200); --c-300: var(--ember-300); --c-400: var(--ember-400);
+  --c-500: var(--ember-500); --c-600: var(--ember-600); --c-700: var(--ember-700); --c-800: var(--ember-800); --c-900: var(--ember-900); --c-950: var(--ember-950);
+  --c-on: var(--ink-950); --c-alt: var(--paper-50);
+}
+[data-color="cobalt"] {
+  --c-50: var(--cobalt-50); --c-100: var(--cobalt-100); --c-200: var(--cobalt-200); --c-300: var(--cobalt-300); --c-400: var(--cobalt-400);
+  --c-500: var(--cobalt-500); --c-600: var(--cobalt-600); --c-700: var(--cobalt-700); --c-800: var(--cobalt-800); --c-900: var(--cobalt-900); --c-950: var(--cobalt-950);
+  --c-on: var(--paper-50); --c-alt: var(--ink-950);
+}
+[data-color="magenta"] {
+  --c-50: var(--magenta-50); --c-100: var(--magenta-100); --c-200: var(--magenta-200); --c-300: var(--magenta-300); --c-400: var(--magenta-400);
+  --c-500: var(--magenta-500); --c-600: var(--magenta-600); --c-700: var(--magenta-700); --c-800: var(--magenta-800); --c-900: var(--magenta-900); --c-950: var(--magenta-950);
+  --c-on: var(--ink-950); --c-alt: var(--paper-50);
+}
+/* the page behind the stage and the browser's theme colour (app.js reads --meta) */
+[data-look="glass"] { --page: var(--c-800); --meta: var(--c-800); }
+[data-look="swiss"] { --page: var(--c-500); --meta: var(--c-500); }
+[data-look="luxe"]  { --page: var(--ink-990); --meta: var(--ink-990); }
+
+/* 1c · semantic tokens. Shared by every look: the light and the shadow that model the surfaces. */
+:root { --highlight: var(--white); --lowlight: var(--black); }
+/* A · PRISM GLASS: a smoked glass card, tinted with the colourway's deep tone, over a mesh that
+   runs from the colourway's light (the glow behind the card) to its night (the frame's edges) */
+[data-look="glass"] .stage {
+  --sheen-blob: var(--c-100); --well-depth: var(--c-500); --swatch-gap: var(--c-900); --swatch-ring: var(--white);
+  --flash-core: var(--white); --spark: var(--white); --plus-ink: var(--white);
+  --stage-base: var(--c-700); --stage-halo: color-mix(in oklab, var(--c-400) 80%, transparent); --stage-1: var(--c-300); --stage-2: var(--c-500); --stage-3: var(--c-900); --stage-4: var(--c-600);
+  --vignette: color-mix(in oklab, var(--c-950) 58%, transparent); --scrim: color-mix(in oklab, var(--c-950) 52%, transparent);
+  --on-field: var(--white); --on-field-muted: color-mix(in srgb, var(--white) 84%, transparent); --grid-line: transparent;
+  --surface: linear-gradient(162deg, color-mix(in oklab, var(--c-800) 68%, transparent), color-mix(in oklab, var(--c-900) 76%, transparent) 58%, color-mix(in oklab, var(--c-900) 70%, transparent));
+  --surface-sheen: color-mix(in srgb, var(--white) 15%, transparent);
+  --surface-2: color-mix(in srgb, var(--white) 9%, transparent);
+  --surface-edge: color-mix(in srgb, var(--white) 30%, transparent); --surface-top: color-mix(in srgb, var(--white) 72%, transparent);
+  --ink: var(--white); --ink-muted: color-mix(in srgb, var(--white) 84%, transparent); --ink-faint: color-mix(in srgb, var(--white) 74%, transparent);
+  --control-edge: color-mix(in srgb, var(--white) 52%, transparent);
+  --accent: var(--c-500); --on-accent: var(--white); --accent-soft: color-mix(in oklab, var(--c-300) 55%, transparent); --accent-text: var(--c-700);
+  --glow: var(--c-300); --focus: var(--white);
+  --well-spot: radial-gradient(64% 78% at 50% 58%, var(--c-50), var(--c-100) 42%, var(--c-200) 78%, var(--c-300));
+  --well-edge: color-mix(in srgb, var(--white) 62%, transparent); --well-ink: var(--c-800);
+  --floor: color-mix(in oklab, var(--c-900) 50%, transparent);
+  --btn: var(--white); --on-btn: var(--c-950); --btn-icon: var(--c-600);
+  --chip-on: var(--white); --on-chip-on: var(--c-700);
+  --tag: var(--c-700); --on-tag: var(--white); --badge: var(--white); --on-badge: var(--c-700);
+  --pill: color-mix(in oklab, var(--c-950) 38%, transparent); --pill-edge: color-mix(in srgb, var(--white) 30%, transparent);
+  --on-pill: var(--white); --on-pill-muted: color-mix(in srgb, var(--white) 80%, transparent);
+  --pill-icon: var(--white); --on-pill-icon: var(--c-700);
+  --bag: var(--pill); --on-bag: var(--white); --bag-edge: var(--pill-edge);
+  --ring: color-mix(in srgb, var(--white) 85%, transparent);
+  --shadow-tint: var(--c-950); --shade: var(--c-950);
+  --sweep: color-mix(in oklab, var(--c-300) 60%, transparent); --flash: var(--c-200);
+  --star: var(--gold-300); --star-off: color-mix(in srgb, var(--white) 26%, transparent);
+  --em: linear-gradient(90deg, var(--white), var(--c-100) 50%, var(--white));
+  --burst-1: var(--white); --burst-2: var(--c-200); --burst-3: var(--c-400); --burst-4: var(--white); --burst-5: var(--c-300);
+}
+/* B · SWISS INDEX: a paper card on a flat field of the colourway's print colour, an ink hairline grid, one accent */
+[data-look="swiss"] .stage {
+  --flash-core: var(--white); --spark: var(--white);
+  --stage-base: var(--c-500); --vignette: transparent; --scrim: transparent;
+  --on-field: var(--c-on); --on-field-muted: var(--c-on); --on-field-alt: var(--c-alt);
+  --grid-line: color-mix(in srgb, var(--c-on) 10%, transparent); --grid-base: color-mix(in srgb, var(--c-on) 7%, transparent);
+  --surface: var(--paper-50); --surface-sheen: transparent; --surface-2: var(--paper-100); --surface-edge: transparent; --surface-top: transparent;
+  --ink: var(--ink-950); --ink-muted: var(--ink-600); --ink-faint: var(--ink-500); --control-edge: var(--ink-950);
+  --accent: var(--c-500); --on-accent: var(--c-on); --accent-soft: color-mix(in srgb, var(--c-500) 14%, transparent); --accent-text: var(--c-700);
+  --glow: var(--white); --focus: var(--ink-950);
+  --well-spot: var(--paper-100); --well-grid: color-mix(in srgb, var(--ink-950) 7%, transparent); --well-edge: transparent; --well-ink: var(--ink-500);
+  --floor: color-mix(in srgb, var(--black) 36%, transparent);
+  --btn: var(--ink-950); --on-btn: var(--paper-50); --btn-icon: var(--on-accent);
+  --chip-on: var(--ink-950); --on-chip-on: var(--paper-50);
+  --tag: var(--c-500); --on-tag: var(--c-on); --badge: var(--ink-950); --on-badge: var(--paper-50);
+  --pill: var(--ink-950); --pill-edge: var(--ink-950); --on-pill: var(--paper-50); --on-pill-muted: color-mix(in srgb, var(--paper-50) 72%, transparent);
+  --pill-icon: var(--c-500); --on-pill-icon: var(--c-on);
+  --bag: var(--paper-50); --on-bag: var(--ink-950); --bag-edge: transparent;
+  --ring: var(--c-on);
+  --shadow-tint: var(--black); --shade: var(--black);
+  --sweep: color-mix(in srgb, var(--white) 28%, transparent); --flash: var(--white);
+  --star: var(--ink-950); --star-off: color-mix(in srgb, var(--ink-950) 18%, transparent);
+  --em: linear-gradient(90deg, var(--c-alt), var(--c-alt));
+  --burst-1: var(--paper-50); --burst-2: var(--ink-950); --burst-3: var(--paper-50); --burst-4: var(--c-200); --burst-5: var(--ink-950);
+}
+/* C · NOIR ATELIER: matte black, a champagne-gold scale for the metal, the colourway as a light (beam, pool, well) */
+[data-look="luxe"] .stage {
+  --pool: var(--c-500); --mote: var(--gold-50); --swatch-gap: var(--ink-900); --swatch-ring: var(--gold-300);
+  --metal-hi: var(--gold-50); --metal-glint: var(--gold-100); --metal-line: var(--gold-400); --metal-glow: var(--gold-400);
+  --flash-core: var(--gold-50); --spark: var(--gold-200); --plus-ink: var(--gold-200);
+  --stage-base: var(--ink-990); --stage-1: color-mix(in oklab, var(--c-500) 22%, var(--gold-900)); --stage-2: color-mix(in oklab, var(--c-500) 34%, transparent);
+  --beam: color-mix(in oklab, var(--c-200) 40%, var(--gold-100));
+  --vignette: transparent; --scrim: transparent;
+  --on-field: var(--ivory-100); --on-field-muted: var(--ivory-300); --grid-line: transparent;
+  --surface: linear-gradient(180deg, var(--ink-850), var(--ink-900) 60%, var(--ink-900));
+  --surface-sheen: transparent; --surface-2: color-mix(in srgb, var(--gold-100) 4%, transparent);
+  --surface-edge: linear-gradient(135deg, var(--gold-100) 0%, var(--gold-400) 30%, var(--gold-700) 56%, var(--gold-300) 80%, var(--gold-600) 100%);
+  --ink: var(--ivory-100); --ink-muted: var(--ivory-300); --ink-faint: var(--ivory-500); --label: var(--gold-500);
+  --control-edge: var(--gold-600);
+  --accent: var(--gold-300); --on-accent: var(--gold-ink); --accent-soft: color-mix(in srgb, var(--gold-300) 12%, transparent); --accent-text: var(--gold-300);
+  --metal: linear-gradient(135deg, var(--gold-100), var(--gold-300) 36%, var(--gold-500) 62%, var(--gold-200) 86%, var(--gold-400));
+  --metal-soft: linear-gradient(135deg, var(--gold-100), var(--gold-400));
+  --glow: var(--c-500); --focus: var(--gold-300);
+  --well-spot: radial-gradient(46% 34% at 50% 88%, color-mix(in oklab, var(--c-500) 52%, transparent), transparent),
+    radial-gradient(58% 72% at 50% 18%, color-mix(in oklab, var(--c-300) 16%, var(--well-noir-1)), var(--well-noir-2) 62%, var(--well-noir-3));
+  --well-cone: color-mix(in oklab, var(--c-100) 30%, color-mix(in srgb, var(--gold-100) 38%, transparent));
+  --well-edge: color-mix(in oklab, var(--c-400) 34%, transparent); --well-ink: var(--ivory-300);
+  --floor: color-mix(in srgb, var(--black) 85%, transparent);
+  --btn: var(--metal); --on-btn: var(--gold-ink); --btn-icon: var(--gold-ink);
+  --chip-on: var(--metal); --on-chip-on: var(--gold-ink);
+  --tag: var(--metal-soft); --on-tag: var(--gold-ink); --badge: var(--metal-soft); --on-badge: var(--gold-ink);
+  --pill: color-mix(in srgb, var(--gold-100) 5%, transparent); --pill-edge: color-mix(in srgb, var(--gold-400) 34%, transparent);
+  --on-pill: var(--ivory-100); --on-pill-muted: var(--ivory-300);
+  --pill-icon: var(--metal-soft); --on-pill-icon: var(--gold-ink);
+  --bag: var(--pill); --on-bag: var(--ivory-100); --bag-edge: var(--pill-edge);
+  --ring: color-mix(in srgb, var(--gold-400) 70%, transparent);
+  --shadow-tint: var(--black); --shade: var(--black);
+  --sweep: color-mix(in srgb, var(--gold-50) 85%, transparent); --flash: var(--c-500);
+  --star: var(--gold-300); --star-off: color-mix(in srgb, var(--gold-400) 22%, transparent);
+  --em: linear-gradient(90deg, var(--gold-100), var(--gold-400) 55%, var(--gold-200));
+  --burst-1: var(--gold-200); --burst-2: var(--c-500); --burst-3: var(--white); --burst-4: var(--gold-400); --burst-5: var(--c-300);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: var(--sans); color: var(--highlight); background: var(--page);
+  -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none; overflow: hidden;
+}
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+p, h1, h2, dl, dd { margin: 0; }
+svg { display: block; }
+
+/* ---- 2. the stage, the frame, the ambient life ---- */
+.stage {
+  position: relative; height: 100dvh; display: grid; place-items: center; overflow: hidden; color: var(--on-field);
+  transition: --c-50 .7s, --c-100 .7s, --c-200 .7s, --c-300 .7s, --c-400 .7s, --c-500 .7s, --c-600 .7s, --c-700 .7s, --c-800 .7s, --c-900 .7s, --c-950 .7s, --c-on .7s, --c-alt .7s;
+  background:
+    radial-gradient(64% 40% at 50% 52%, var(--stage-halo, transparent), transparent 76%),
+    radial-gradient(60% 42% at 12% 22%, var(--stage-4), transparent 70%),
+    radial-gradient(55% 40% at 92% 38%, var(--stage-1), transparent 72%),
+    radial-gradient(70% 45% at 18% 92%, var(--stage-3), transparent 70%),
+    radial-gradient(60% 40% at 88% 98%, var(--stage-2), transparent 70%),
+    var(--stage-base);
+}
+.frame { position: relative; width: 432px; height: 768px; flex: none; transform: scale(calc(var(--k, 1) * var(--bump, 1))); }
+.amb { position: absolute; inset: 0; pointer-events: none; }
+.amb > * { position: absolute; display: none; }
+/* glass: the frame's vignette, over the ambient lights and under the words and the card. It reaches past the frame
+   (480 px a side, 200 px above and below: a 16:9 screen or a tall phone), so a screen that is not 9:16 stays framed
+   with no seam; the scrims keep the words at the top and the foot readable. Swiss and luxe have no vignette. */
+[data-look="glass"] .amb::after {
+  content: ''; position: absolute; inset: -200px -480px;
+  background:
+    linear-gradient(180deg, var(--scrim) 200px, transparent 390px, transparent 790px, var(--scrim) 968px),
+    radial-gradient(250px 400px at 50% 50%, transparent 40%, var(--vignette));
+}
+/* glass: four big soft lights drift and breathe (app.js, from the studio clock) */
+[data-look="glass"] .blob { display: block; left: 0; top: 0; border-radius: 50%; opacity: .75; will-change: transform, opacity; }
+.b1 { width: 520px; height: 380px; background: radial-gradient(closest-side, var(--stage-2), color-mix(in srgb, var(--stage-2) 50%, transparent) 40%, transparent); }
+.b2 { width: 460px; height: 340px; background: radial-gradient(closest-side, var(--stage-1), color-mix(in srgb, var(--stage-1) 50%, transparent) 40%, transparent); }
+.b3 { width: 500px; height: 420px; background: radial-gradient(closest-side, var(--stage-3), color-mix(in srgb, var(--stage-3) 50%, transparent) 40%, transparent); }
+.b4 { width: 360px; height: 360px; background: radial-gradient(closest-side, var(--sheen-blob), color-mix(in srgb, var(--sheen-blob) 40%, transparent) 35%, transparent); opacity: .3 !important; }
+
+/* ---- 3. the frame's words, and the shop bar ---- */
+.title { position: absolute; top: 30px; left: 0; right: 0; text-align: center; z-index: 1; }
+.series {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 0 0 9px; font-size: 11px; font-weight: 600; letter-spacing: .3em; text-transform: uppercase; color: var(--on-field-muted);
+}
+.series b { display: inline-grid; place-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; letter-spacing: .04em; color: var(--on-badge); background: var(--badge); }
+.title h1 { font-size: 42px; font-weight: 700; line-height: 1; letter-spacing: -.05em; white-space: nowrap; }
+.title h1 em {
+  font-family: var(--serif); font-weight: 400; font-style: italic; font-size: 1.12em; letter-spacing: -.02em; padding: 0 .08em;
+  background: var(--em); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hint { margin-top: 6px; font-size: 14px; color: var(--on-field-muted); }
+
+.shopbar { position: absolute; left: 40px; right: 40px; top: 138px; height: 38px; display: flex; align-items: center; justify-content: space-between; z-index: 3; }
+.crumbs { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--on-field-muted); }
+.crumbs span:last-child { color: var(--on-field); }
+.crumbs i { font-style: normal; opacity: .6; }
+.bag {
+  position: relative; height: 38px; padding: 0 16px 0 12px; display: flex; align-items: center; gap: 7px; border: 0; border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: var(--on-bag); background: var(--bag);
+  box-shadow: inset 0 0 0 1px var(--bag-edge), 0 10px 22px -12px color-mix(in srgb, var(--shadow-tint) 50%, transparent); will-change: transform;
+}
+.bag.is-front { z-index: 6; }                                  /* the landing shoe passes behind the bag */
+.bag-icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.bag-glow { position: absolute; inset: -14px; border-radius: 999px; opacity: 0; pointer-events: none; background: radial-gradient(closest-side, var(--flash-core), color-mix(in srgb, var(--glow) 60%, transparent) 45%, transparent); will-change: opacity, transform; }
+.badge {
+  position: absolute; right: -9px; top: -9px; min-width: 24px; height: 24px; padding: 0 6px; display: grid; place-items: center;
+  border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  color: var(--on-badge); background: var(--badge); box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--shadow-tint) 35%, transparent); transform: scale(0); will-change: transform;
+}
+
+/* the odometer: every character is a window; a character that changes rolls (old out, new in) */
+.odo { display: inline-flex; overflow: hidden; vertical-align: top; line-height: 1.25; padding: 0 .02em; }
+.odo .col { position: relative; display: inline-grid; }
+.odo .col > span { grid-area: 1 / 1; display: block; text-align: center; will-change: transform; }
+
+/* ---- 4. the card: two faces in 3D ----
+   .card-3d turns (app.js). Each face hides its back; app.js also hides the face that is turned away (visibility), so
+   the two can never fight for the same pixels, and makes it inert. */
+.card { position: absolute; left: 40px; top: 186px; width: 352px; height: 448px; perspective: 1800px; z-index: 2; }
+.card-shadow {
+  position: absolute; left: 6%; right: 6%; bottom: -26px; height: 60px; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--shadow-tint) 55%, transparent), transparent); will-change: transform, opacity;
+}
+.card-3d { position: absolute; inset: 0; transform-style: preserve-3d; }   /* no will-change: a promoted layer kept the raster of the mid-turn and showed the receipt soft once it settled */
+.face {
+  position: absolute; inset: 0; display: flex; flex-direction: column; border-radius: var(--card-r, 30px); color: var(--ink);
+  -webkit-backface-visibility: hidden; backface-visibility: hidden;
+}
+.front { transform: translateZ(1px); padding: 12px; }
+.back { transform: rotateY(180deg) translateZ(1px); padding: 18px 20px 16px; }
+.shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--shade) 50%, transparent), color-mix(in srgb, var(--shade) 15%, transparent)); will-change: opacity; }
+.back .shade { background: linear-gradient(270deg, color-mix(in srgb, var(--shade) 50%, transparent), color-mix(in srgb, var(--shade) 15%, transparent)); }
+.rim { display: none; }
+
+/* glass: the faces, a tinted smoked glass with a white sheen and a crisp light edge */
+[data-look="glass"] .face {
+  --card-r: 32px;
+  background: radial-gradient(120% 60% at 0% 0%, var(--surface-sheen), transparent 60%), var(--surface);
+  box-shadow: inset 0 1.5px 0 var(--surface-top), inset 0 0 0 1px var(--surface-edge), inset 0 -30px 50px -30px color-mix(in srgb, var(--highlight) 14%, transparent), 0 40px 70px -34px color-mix(in oklab, var(--shadow-tint) 70%, transparent);
+}
+
+/* ---- 5. the front ---- */
+.well { position: relative; height: 192px; flex: none; border-radius: 22px; overflow: hidden; isolation: isolate; }
+.well-bg { position: absolute; inset: 0; background: var(--well-spot); }
+[data-look="glass"] .well-bg { box-shadow: inset 0 0 0 1px var(--well-edge), inset 0 -24px 40px -28px color-mix(in oklab, var(--well-depth) 40%, transparent); }
+.well-flash { position: absolute; left: 50%; top: 52%; width: 300px; height: 220px; margin: -110px 0 0 -150px; border-radius: 50%; opacity: 0; background: radial-gradient(closest-side, var(--flash-core), color-mix(in srgb, var(--flash) 70%, transparent) 40%, transparent); will-change: opacity, transform; }
+.floor { position: absolute; left: 50%; bottom: 8px; width: 260px; height: 28px; margin-left: -130px; border-radius: 50%; background: radial-gradient(closest-side, var(--floor), color-mix(in srgb, var(--floor) 36%, transparent) 55%, transparent); will-change: transform, opacity; }
+/* the photos are 4:3 with a clear margin above and below the shoe (≈14 %), so the box overhangs the well a little */
+.shoe-box { position: absolute; left: 14px; top: -18px; width: 300px; height: 225px; will-change: transform; }
+.shoe { position: absolute; left: 0; top: 0; width: 300px; height: 225px; object-fit: contain; opacity: 0; will-change: transform, opacity; pointer-events: none; }
+.shoe.is-cur { opacity: 1; }
+.tag, .idx { position: absolute; top: 12px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.tag { left: 12px; padding: 5px 9px; border-radius: 999px; color: var(--on-tag); background: var(--tag); }
+.idx { right: 14px; top: 16px; font-weight: 600; color: var(--well-ink); }
+
+.info { display: grid; grid-template-columns: 1fr auto; align-items: end; margin-top: 12px; padding: 0 6px; }
+.name { font-size: 25px; font-weight: 700; letter-spacing: -.035em; line-height: 1.1; white-space: nowrap; }
+.price { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 30px; font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+.price .cur { font-size: .55em; vertical-align: .62em; margin-right: 1px; opacity: .85; }
+.rating { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.rating-n i { font-style: normal; opacity: .6; margin: 0 2px; }
+.stars { position: relative; display: block; width: 74px; height: 14px; }
+.stars > span { position: absolute; left: 0; top: 0; height: 14px; overflow: hidden; display: flex; gap: 1px; }
+.stars-on { width: 96%; }                                      /* 4.8 of 5 */
+.stars svg { width: 14px; height: 14px; flex: none; fill: currentColor; }
+.stars-off { color: var(--star-off); width: 100%; }
+.stars-on { color: var(--star); }
+
+.opt { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 6px; min-height: 32px; }
+.opt-label { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+.opt-label b { margin-left: 6px; color: var(--ink); font-weight: 700; letter-spacing: .06em; }
+.opt-size { min-height: 18px; margin-top: 6px; }
+.size-hint { font-size: 12px; font-weight: 700; opacity: 0; will-change: transform, opacity; }
+[data-look="glass"] .size-hint { color: var(--on-tag); padding: 2px 8px; border-radius: 999px; background: var(--tag); }
+
+/* the radios: native inputs, visually hidden; the label draws the swatch or the chip */
+.swatches { display: flex; gap: 6px; }
+.chips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 7px; padding: 0 2px; will-change: transform; }
+.pick { position: relative; display: grid; place-items: center; cursor: pointer; }
+.pick input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.sw { width: 34px; height: 34px; }                             /* a 34 px target around a 26 px swatch */
+.sw .dot { width: 26px; height: 26px; border-radius: 50%; background: var(--sw); transition: transform .2s; }
+.chip { height: 38px; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip .face-c { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 12px; transition: background-color .18s, color .18s, box-shadow .18s; }
+.pick input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 3px; }
+[data-look="glass"] .sw .dot { box-shadow: inset 0 -4px 6px color-mix(in srgb, var(--lowlight) 18%, transparent), inset 0 3px 5px color-mix(in srgb, var(--highlight) 45%, transparent), 0 0 0 2px color-mix(in srgb, var(--highlight) 35%, transparent); }
+[data-look="glass"] .sw input:checked + .dot { box-shadow: inset 0 -4px 6px color-mix(in srgb, var(--lowlight) 18%, transparent), inset 0 3px 5px color-mix(in srgb, var(--highlight) 45%, transparent), 0 0 0 2.5px var(--swatch-gap), 0 0 0 5px var(--swatch-ring); transform: scale(.86); }
+[data-look="glass"] .chip .face-c { color: var(--ink); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); }
+[data-look="glass"] .chip input:checked + .face-c { color: var(--on-chip-on); background: var(--chip-on); box-shadow: 0 8px 18px -8px color-mix(in oklab, var(--shadow-tint) 60%, transparent); }
+[data-look="glass"] .chips.is-bad .face-c { box-shadow: inset 0 0 0 1.5px var(--highlight); background: color-mix(in srgb, var(--highlight) 20%, transparent); }
+
+.add {
+  position: relative; margin-top: auto; height: 50px; flex: none; display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: 0; overflow: hidden; font-size: 16px; font-weight: 700; letter-spacing: -.01em; will-change: transform;
+  color: var(--on-btn); background: var(--btn);
+}
+.add:focus-visible, .checkout:focus-visible, .keep:focus-visible, .bag:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.stepper button:focus-visible { outline: 2.5px solid var(--focus); outline-offset: -3px; }
+.add-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.add .add-icon, .checkout .add-icon { color: var(--btn-icon); }
+.add-sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 80px; opacity: 0; background: linear-gradient(100deg, transparent, var(--sweep), transparent); will-change: transform, opacity; }
+[data-look="glass"] .add { border-radius: 999px; box-shadow: 0 14px 28px -12px color-mix(in oklab, var(--shadow-tint) 70%, transparent); }
+
+/* ---- 6. the back: the mini-cart receipt ---- */
+.back-top { display: flex; align-items: center; justify-content: space-between; }
+.ok { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--on-badge); background: var(--badge); }
+.ok svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ref { font-size: 11px; font-weight: 600; letter-spacing: .1em; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.ref b { color: var(--ink-muted); }
+.back-title { margin-top: 12px; font-size: 32px; font-weight: 700; letter-spacing: -.045em; line-height: 1; outline: none; }
+.back-title:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
+.line { display: grid; grid-template-columns: 96px 1fr; grid-template-rows: auto auto; column-gap: 14px; row-gap: 10px; margin-top: 16px; }
+.thumb { grid-row: 1 / span 2; position: relative; width: 96px; height: 96px; border-radius: 18px; overflow: hidden; background: var(--well-spot); }
+.thumb img { position: absolute; left: -12px; top: 8px; width: 120px; height: auto; transform: rotate(-8deg); }
+.line-name { font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.line-var { margin-top: 2px; font-size: 12.5px; font-weight: 500; color: var(--ink-muted); }
+.line-price { margin-top: 4px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stepper { display: inline-flex; align-items: center; justify-self: start; height: 38px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.stepper button { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 999px; background: none; }
+.stepper button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.stepper button[aria-disabled="true"] { opacity: .35; cursor: default; }
+.qty { min-width: 26px; text-align: center; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tear { position: relative; height: 22px; margin: 14px -20px 6px; }
+.tear::before { content: ''; position: absolute; left: 22px; right: 22px; top: 50%; border-top: 1.5px dashed currentColor; opacity: .38; }
+.rows { display: grid; gap: 6px; }
+.rows > div { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; }
+.rows dt { color: var(--ink-muted); font-weight: 500; }
+.rows dd { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rows .sub { margin-top: 6px; align-items: center; }
+.rows .sub dt { font-size: 14px; font-weight: 700; color: var(--ink); }
+.rows .items { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); }
+.rows .sub dd { font-size: 30px; font-weight: 800; letter-spacing: -.04em; }
+.checkout { margin-top: auto; height: 50px; flex: none; display: flex; align-items: center; justify-content: center; gap: 10px; border: 0; font-size: 16px; font-weight: 700; color: var(--on-btn); background: var(--btn); }
+.keep { align-self: center; margin-top: 6px; height: 34px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; background: none; font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+.keep svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.keep:hover { color: var(--ink); }
+
+/* the receipt's punched notches: two half-circles cut out of the card's edges, level with the tear line */
+.back { -webkit-mask: radial-gradient(circle 11px at 0 var(--notch, 262px), transparent 10.5px, #000 11px) left / 51% 100% no-repeat, radial-gradient(circle 11px at 100% var(--notch, 262px), transparent 10.5px, #000 11px) right / 51% 100% no-repeat;
+        mask: radial-gradient(circle 11px at 0 var(--notch, 262px), transparent 10.5px, #000 11px) left / 51% 100% no-repeat, radial-gradient(circle 11px at 100% var(--notch, 262px), transparent 10.5px, #000 11px) right / 51% 100% no-repeat; }
+[data-look="glass"] .thumb { box-shadow: inset 0 0 0 1px var(--well-edge); }
+[data-look="glass"] .stepper { background: var(--surface-2); }
+[data-look="glass"] .stepper button:hover { background: color-mix(in srgb, var(--highlight) 16%, transparent); }
+[data-look="glass"] .checkout { border-radius: 999px; box-shadow: 0 14px 28px -12px color-mix(in oklab, var(--shadow-tint) 70%, transparent); }
+
+/* ---- 7. the pop-out and the impact ---- */
+.fx { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.flyer { position: absolute; left: 0; top: 0; width: 300px; height: 225px; opacity: 0; will-change: transform, opacity; }
+.flyer img { width: 100%; height: 100%; display: block; }
+.fly-shadow { position: absolute; left: 0; top: 0; width: 300px; height: 60px; border-radius: 50%; opacity: 0; will-change: transform, opacity; background: radial-gradient(closest-side, color-mix(in oklab, var(--shadow-tint) 55%, transparent), color-mix(in oklab, var(--shadow-tint) 22%, transparent) 50%, transparent); }
+.fx-rings i { position: absolute; left: 0; top: 0; width: 80px; height: 80px; margin: -40px 0 0 -40px; border-radius: 50%; opacity: 0; will-change: transform, opacity; border: 2px solid var(--spark); box-shadow: 0 0 14px color-mix(in srgb, var(--flash) 80%, transparent), inset 0 0 10px color-mix(in srgb, var(--flash) 60%, transparent); }
+.fx-parts i { position: absolute; left: 0; top: 0; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; opacity: 0; background: var(--c); will-change: transform, opacity; }
+.fx-parts i.streak { width: 16px; height: 3px; margin: -1.5px 0 0 -8px; border-radius: 3px; }
+.fx-plus { position: absolute; left: 0; top: 0; font-size: 15px; font-weight: 800; color: var(--plus-ink); opacity: 0; will-change: transform, opacity; text-shadow: 0 2px 10px color-mix(in srgb, var(--shadow-tint) 40%, transparent); }
+
+/* ---- 11. reduced motion: no flight, no turn. The two faces cross-fade, the colour changes at once. ---- */
+.calm .stage { transition: none; }
+.calm .face { transition: opacity .16s linear; }
+.face[inert] { pointer-events: none; }
+.calm .back { transform: translateZ(1px); }                     /* no turn: the back simply fades in, facing us */
+@media (prefers-reduced-motion: reduce) {
+  .touch, .sw .dot, .chip .face-c { transition: none; }
+}
